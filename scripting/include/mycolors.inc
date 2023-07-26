@@ -3,13 +3,6 @@
 #endif
 #define _mycolors_included
 
-ColorCB gH_ColorCallback;
-
-/**
- * Callback for when the client selects a color.
- */
-typedef ColorCB = function void(int client, Color color, bool exitBack);
-
 enum Color
 {
     WHITE,
@@ -23,6 +16,7 @@ enum Color
     COLORS_SIZE
 };
 
+//Example for RED: gI_Colors[RED]
 int gI_ColorIndex[COLORS_SIZE][4] =
 {
     {255, 255, 255, 255}, //WHITE
@@ -71,9 +65,11 @@ stock void GetColorString(Color color, char[] buffer, int length)
     }
 }
 
-stock bool CreateColorMenu(int client, Color current, ColorCB callback)
+stock Menu CreateColorMenu(int client, Color current)
 {
     Menu menu = new Menu(Color_MenuHandler);
+    menu.SetTitle("Select a color");
+    menu.ExitBackButton = true;
 
     char info[4];
 
@@ -101,42 +97,5 @@ stock bool CreateColorMenu(int client, Color current, ColorCB callback)
     IntToString(view_as<int>(ORANGE), info, sizeof(info));
     menu.AddItem(info, "Orange", current == ORANGE ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
 
-    gH_ColorCallback = callback;
-
-    menu.ExitBackButton = true;
-    return menu.Display(client, MENU_TIME_FOREVER);
-}
-
-public int Color_MenuHandler(Menu menu, MenuAction action, int param1, int param2)
-{
-    switch(action)
-    {
-        case MenuAction_Select:
-        {
-            char info[64];
-            menu.GetItem(param2, info, sizeof(info));
-
-            Call_StartFunction(INVALID_HANDLE, gH_ColorCallback);
-            Call_PushCell(param1);
-            Call_PushCell(view_as<Color>(StringToInt(info)));
-            Call_PushCell(false);
-            Call_Finish();
-
-            CreateColorMenu(param1, view_as<Color>(StringToInt(info)), gH_ColorCallback);
-        }
-
-        case MenuAction_Cancel:
-        {
-            if(param2 == MenuCancel_ExitBack)
-            {
-                Call_StartFunction(INVALID_HANDLE, gH_ColorCallback);
-                Call_PushCell(param1);
-                Call_PushCell(-1);
-                Call_PushCell(true);
-                Call_Finish();
-            }
-        }
-    }
-
-    return 0;
+    return menu;
 }

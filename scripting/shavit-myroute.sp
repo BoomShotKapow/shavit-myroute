@@ -875,7 +875,7 @@ bool CreatePathSettingsMenu(int client, int page = 0)
     if(gI_PathColorIndex[client] != -1)
     {
         char color[16];
-        GetColorString(view_as<Color>(gI_PathColorIndex[client]), color, sizeof(color));
+        GetColorString(view_as<COLOR>(gI_PathColorIndex[client]), color, sizeof(color));
 
         menu.AddItem("path_color", "[Path Colors]");
     }
@@ -944,7 +944,7 @@ public int PathSettings_MenuHandler(Menu menu, MenuAction action, int param1, in
             }
             else if(StrEqual(info, "path_color"))
             {
-                CreateColorMenu(param1, view_as<Color>(gI_PathColorIndex[param1]), PathColor_Callback);
+                CreateColorMenu(param1, view_as<COLOR>(gI_PathColorIndex[param1]), PathColor_MenuHandler);
 
                 return 0;
             }
@@ -964,21 +964,36 @@ public int PathSettings_MenuHandler(Menu menu, MenuAction action, int param1, in
     return 0;
 }
 
-void PathColor_Callback(int client, Color color, bool exitBack)
+public int PathColor_MenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
-    if(exitBack)
+    switch(action)
     {
-        CreatePathSettingsMenu(client);
+        case MenuAction_Select:
+        {
+            char info[64];
+            menu.GetItem(param2, info, sizeof(info));
 
-        return;
+            int color = StringToInt(info);
+
+            char data[2];
+            IntToString(color, data, sizeof(data));
+
+            gI_PathColorIndex[param1] = color;
+            gH_PathColorCookie.Set(param1, data);
+
+            CreateColorMenu(param1, view_as<COLOR>(color), PathColor_MenuHandler);
+        }
+
+        case MenuAction_Cancel:
+        {
+            if(param2 == MenuCancel_ExitBack)
+            {
+                CreatePathSettingsMenu(param1);
+            }
+        }
     }
 
-    gI_PathColorIndex[client] = view_as<int>(color);
-
-    char newvalue[4];
-    IntToString(view_as<int>(color), newvalue, sizeof(newvalue));
-
-    UpdateClientCookie(client, gH_PathColorCookie, newvalue);
+    return 0;
 }
 
 bool CreateJumpMarkersMenu(int client, int page = 0)
@@ -1053,7 +1068,7 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
             }
             else if(StrEqual(info, "marker_color"))
             {
-                CreateColorMenu(param1, view_as<Color>(gI_JumpColorIndex[param1]), JumpMarkerColor_Callback);
+                CreateColorMenu(param1, view_as<COLOR>(gI_JumpColorIndex[param1]), JumpMarkerColor_MenuHandler);
 
                 return 0;
             }
@@ -1088,21 +1103,36 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
     return 0;
 }
 
-void JumpMarkerColor_Callback(int client, Color color, bool exitBack)
+public int JumpMarkerColor_MenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
-    if(exitBack)
+    switch(action)
     {
-        CreateJumpMarkersMenu(client);
+        case MenuAction_Select:
+        {
+            char info[64];
+            menu.GetItem(param2, info, sizeof(info));
 
-        return;
+            int color = StringToInt(info);
+
+            char data[2];
+            IntToString(color, data, sizeof(data));
+
+            gI_JumpColorIndex[param1] = color;
+            gH_JumpMarkerColorCookie.Set(param1, data);
+
+            CreateColorMenu(param1, view_as<COLOR>(color), JumpMarkerColor_MenuHandler);
+        }
+
+        case MenuAction_Cancel:
+        {
+            if(param2 == MenuCancel_ExitBack)
+            {
+                CreateJumpMarkersMenu(param1);
+            }
+        }
     }
 
-    gI_JumpColorIndex[client] = view_as<int>(color);
-
-    char newvalue[4];
-    IntToString(view_as<int>(color), newvalue, sizeof(newvalue));
-
-    UpdateClientCookie(client, gH_JumpMarkerColorCookie, newvalue);
+    return 0;
 }
 
 public Action Command_Route(int client, int args)
