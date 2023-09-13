@@ -65,9 +65,9 @@ stock void GetColorString(Color color, char[] buffer, int length)
     }
 }
 
-stock Menu CreateColorMenu(int client, Color current)
+stock bool CreateColorMenu(int client, Color current, MenuHandler handler)
 {
-    Menu menu = new Menu(Color_MenuHandler);
+    Menu menu = new Menu(handler);
     menu.SetTitle("Select a color");
     menu.ExitBackButton = true;
 
@@ -97,5 +97,5 @@ stock Menu CreateColorMenu(int client, Color current)
     IntToString(view_as<int>(ORANGE), info, sizeof(info));
     menu.AddItem(info, "Orange", current == ORANGE ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
 
-    return menu;
+    return menu.Display(client, MENU_TIME_FOREVER);
 }
