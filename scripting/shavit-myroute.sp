@@ -5,8 +5,7 @@
 #include <closestpos>
 #include <sdktools>
 #include <mycolors>
-#include <shavit/steamid-stocks>
-#include <shavit/replay-stocks.sp>
+#include <myreplay>
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -34,25 +33,27 @@ enum struct JumpMarker
     float line3[3];
     float line4[3];
 
-    void Initialize(frame_t frame, int jumpSize, int id, int frameNum)
+    void Initialize(frame_t frame, int size, int id, int frameNum)
     {
+        float jumpSize = float(size);
+
         this.id = id;
         this.frameNum = frameNum;
 
-        this.line1[0] = frame.pos[0] + float(jumpSize);
-        this.line1[1] = frame.pos[1] + float(jumpSize);
+        this.line1[0] = frame.pos[0] + jumpSize;
+        this.line1[1] = frame.pos[1] + jumpSize;
         this.line1[2] = frame.pos[2];
 
-        this.line2[0] = frame.pos[0] + float(jumpSize);
-        this.line2[1] = frame.pos[1] - float(jumpSize);
+        this.line2[0] = frame.pos[0] + jumpSize;
+        this.line2[1] = frame.pos[1] - jumpSize;
         this.line2[2] = frame.pos[2];
 
-        this.line3[0] = frame.pos[0] - float(jumpSize);
-        this.line3[1] = frame.pos[1] - float(jumpSize);
+        this.line3[0] = frame.pos[0] - jumpSize;
+        this.line3[1] = frame.pos[1] - jumpSize;
         this.line3[2] = frame.pos[2];
 
-        this.line4[0] = frame.pos[0] - float(jumpSize);
-        this.line4[1] = frame.pos[1] + float(jumpSize);
+        this.line4[0] = frame.pos[0] - jumpSize;
+        this.line4[1] = frame.pos[1] + jumpSize;
         this.line4[2] = frame.pos[2];
     }
 
@@ -353,7 +354,7 @@ public void OnClientCookiesCached(int client)
     LoadMyRoute(client);
 }
 
-void GetMyRoute(int client)
+bool GetMyRoute(int client)
 {
     if(gS_ReplayFolder[0] == '\0')
     {
@@ -364,7 +365,7 @@ void GetMyRoute(int client)
     if(!GetClientAuthId(client, AuthId_Steam3, steamID, sizeof(steamID)))
     {
         LogError("Failed to authenticate [%N]!", client);
-        return;
+        return false;
     }
 
     FormatEx(gS_ReplayPath[client], PLATFORM_MAX_PATH, "%s/copy/%d_%s.replay", gS_ReplayFolder, SteamIDToAccountID(steamID), gS_Map);
@@ -381,18 +382,18 @@ void GetMyRoute(int client)
     GetClientRouteType(client, type, sizeof(type));
 
     PrintDebug("[%N]'s route path | Type: [%s] | Path [%s]", client, type, gS_ReplayPath[client]);
+
+    return true;
 }
 
 bool LoadMyRoute(int client)
 {
     gB_LoadedReplay[client] = false;
 
-    if(!IsValidClient(client) || IsFakeClient(client))
+    if(!IsValidClient(client) || IsFakeClient(client) || !GetMyRoute(client))
     {
         return false;
     }
-
-    GetMyRoute(client);
 
     char type[16];
     GetClientRouteType(client, type, sizeof(type));
@@ -408,44 +409,41 @@ bool LoadMyRoute(int client)
     {
         gH_ClosestPos[client] = new ClosestPos(gA_FrameCache[client].aFrames, 0, gA_FrameCache[client].iPreFrames, gA_FrameCache[client].iFrameCount);
 
-        gA_JumpMarkerCache[client].Clear();
-
-        if(gB_ShowJumps[client])
+        if(gA_JumpMarkerCache[client] == null)
         {
-            int markerId;
-
-            //Cache each jump marker in the client's route
-            for(int i = 0; i < gA_FrameCache[client].aFrames.Length; i++)
-            {
-                int lookAhead = (i + 1) < gA_FrameCache[client].aFrames.Length ? (i + 1) : i;
-
-                frame_t prev, cur;
-                gA_FrameCache[client].aFrames.GetArray(lookAhead, cur, sizeof(frame_t));
-                gA_FrameCache[client].aFrames.GetArray(lookAhead <= 0 ? 0 : lookAhead - 1, prev, sizeof(frame_t));
-
-                if(IsJump(prev, cur))
-                {
-                    JumpMarker marker;
-                    marker.Initialize(cur, gI_JumpSize[client], markerId, i);
-
-                    markerId++;
-
-                    gA_JumpMarkerCache[client].PushArray(marker, sizeof(marker));
-                }
-            }
-
-            PrintDebug("Cached [%N]'s jump markers | Size: [%d]", client, gA_JumpMarkerCache[client].Length);
+            gA_JumpMarkerCache[client] = new ArrayList(sizeof(JumpMarker));
         }
+        else
+        {
+            gA_JumpMarkerCache[client].Clear();
+        }
+
+        int markerId;
+
+        //Cache each jump marker in the client's route
+        for(int i = 0; i < gA_FrameCache[client].aFrames.Length; i++)
+        {
+            int lookAhead = (i + 1) < gA_FrameCache[client].aFrames.Length ? (i + 1) : i;
+
+            frame_t prev, cur;
+            gA_FrameCache[client].aFrames.GetArray(lookAhead, cur, sizeof(frame_t));
+            gA_FrameCache[client].aFrames.GetArray(lookAhead <= 0 ? 0 : lookAhead - 1, prev, sizeof(frame_t));
+
+            if(IsJump(prev, cur))
+            {
+                JumpMarker marker;
+                marker.Initialize(cur, gI_JumpSize[client], markerId, i);
+
+                markerId++;
+
+                gA_JumpMarkerCache[client].PushArray(marker, sizeof(marker));
+            }
+        }
+
+        PrintDebug("Cached [%N]'s jump markers | Size: [%d]", client, gA_JumpMarkerCache[client].Length);
     }
 
-    if(Shavit_GetTimerStatus(client) == Timer_Running && gH_ClosestPos[client] != null)
-    {
-        ResetMyRoute(client, true);
-    }
-    else
-    {
-        ResetMyRoute(client);
-    }
+    ResetMyRoute(client, Shavit_GetTimerStatus(client) == Timer_Running && gH_ClosestPos[client] != null);
 
     gB_LoadedReplay[client] = true;
 
@@ -504,30 +502,12 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
     gA_FrameCache[client].aFrames.GetArray(lookAhead, replay_frame, sizeof(frame_t));
     gA_FrameCache[client].aFrames.GetArray(lookAhead <= 0 ? 0 : lookAhead - 1, replay_prevframe, sizeof(frame_t));
 
-    DrawMyRoute(client, replay_prevframe, replay_frame, GetVelocityDifference(client, iClosestFrame));
+    DrawMyRoute(client, replay_prevframe, replay_frame);
 }
 
-float GetVelocityDifference(int client, int frame)
+void DrawMyRoute(int client, frame_t prev, frame_t cur)
 {
-    float clientVel[3];
-    GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", clientVel);
-
-    float fReplayPrevPos[3], fReplayClosestPos[3];
-    gA_FrameCache[client].aFrames.GetArray(frame, fReplayClosestPos, 3);
-    gA_FrameCache[client].aFrames.GetArray(frame <= 0 ? 0 : frame - 1, fReplayPrevPos, 3);
-
-    int style = Shavit_GetBhopStyle(client);
-
-    float replayVel[3];
-    MakeVectorFromPoints(fReplayClosestPos, fReplayPrevPos, replayVel);
-    ScaleVector(replayVel, (1.0 / GetTickInterval()) / Shavit_GetStyleSettingFloat(style, "speed") / Shavit_GetStyleSettingFloat(style, "timescale"));
-
-    return (SquareRoot(Pow(clientVel[0], 2.0) + Pow(clientVel[1], 2.0))) - (SquareRoot(Pow(replayVel[0], 2.0) + Pow(replayVel[1], 2.0)));
-}
-
-void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
-{
-    UpdateColor(client, velDiff);
+    UpdateColor(client);
 
     //Draw the client's routed path
     if(gB_ShowPath[client])
@@ -692,7 +672,7 @@ void ResetMyRoute(int client, bool closestFrame = false)
     }
     else
     {
-        UpdateColor(client, GetVelocityDifference(client, iClosestFrame));
+        UpdateColor(client);
     }
 
     gI_PrevStep[client] = 0;
@@ -719,8 +699,9 @@ public void BeamEffect(int client, float start[3], float end[3], float duration,
     TE_SendToClient(client);
 }
 
-void UpdateColor(int client, float velDiff)
+void UpdateColor(int client)
 {
+    float velDiff = Shavit_GetClosestReplayVelocityDifference(client, false);
     int stepsize = RoundToFloor(velDiff * gCV_VelDiffScalar.FloatValue);
 
     //Prevent the color from changing too fast
@@ -790,8 +771,7 @@ bool UpdateClientCookie(int client, Cookie cookie, const char[] newvalue = "")
         cookie.Set(client, newvalue);
     }
 
-    bool status = (value[0] == '1') ? false : true;
-    return status;
+    return (value[0] == '1') ? false : true;
 }
 
 bool CreateMyRouteMenu(int client, int page = 0)
@@ -806,8 +786,8 @@ bool CreateMyRouteMenu(int client, int page = 0)
 
     char display[64];
     FormatEx(display, sizeof(display), "[%s]", type);
-    menu.AddItem("type", display);
 
+    menu.AddItem("type", display);
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
     menu.AddItem("pathsettings", "[Path Settings]");
     menu.AddItem("jumpmarker", "[Jump Marker]");
@@ -831,13 +811,9 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
             }
             else if(StrEqual(info, "type"))
             {
-                if(gRT_RouteType[param1] + 1 >= RouteType_Size)
+                if(++gRT_RouteType[param1] >= RouteType_Size)
                 {
                     gRT_RouteType[param1] = RouteType_Auto;
-                }
-                else
-                {
-                    gRT_RouteType[param1]++;
                 }
 
                 char newvalue[4];
@@ -892,9 +868,6 @@ bool CreatePathSettingsMenu(int client, int page = 0)
 
     if(gI_PathColorIndex[client] != -1)
     {
-        char color[16];
-        GetColorString(view_as<Color>(gI_PathColorIndex[client]), color, sizeof(color));
-
         menu.AddItem("path_color", "[Path Colors]");
     }
 
@@ -911,37 +884,27 @@ public int PathSettings_MenuHandler(Menu menu, MenuAction action, int param1, in
             char info[64];
             menu.GetItem(param2, info, sizeof(info));
 
+            char newvalue[4];
+
             if(StrEqual(info, "enabled"))
             {
                 gB_ShowPath[param1] = UpdateClientCookie(param1, gH_ShowPathCookie);
             }
-            else if(StrEqual(info, "increment"))
+            else if(StrEqual(info, "increment") || StrEqual(info, "decrement"))
             {
-                if(gI_PathSize[param1] + 1 > MAX_BEAM_WIDTH)
+                int value = (StrEqual(info, "increment")) ? 1 : -1;
+
+                gI_PathSize[param1] += value;
+
+                if(gI_PathSize[param1] > MAX_BEAM_WIDTH)
                 {
                     gI_PathSize[param1] = 1;
                 }
-                else
-                {
-                    gI_PathSize[param1]++;
-                }
-
-                char newvalue[4];
-                IntToString(gI_PathSize[param1], newvalue, sizeof(newvalue));
-                UpdateClientCookie(param1, gH_PathSizeCookie, newvalue);
-            }
-            else if(StrEqual(info, "decrement"))
-            {
-                if(gI_PathSize[param1] - 1 < 1)
+                else if(gI_PathSize[param1] <= 0)
                 {
                     gI_PathSize[param1] = MAX_BEAM_WIDTH;
                 }
-                else
-                {
-                    gI_PathSize[param1]--;
-                }
 
-                char newvalue[4];
                 IntToString(gI_PathSize[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_PathSizeCookie, newvalue);
             }
@@ -956,7 +919,6 @@ public int PathSettings_MenuHandler(Menu menu, MenuAction action, int param1, in
                     gI_PathColorIndex[param1] = -1;
                 }
 
-                char newvalue[4];
                 IntToString(gI_PathColorIndex[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_PathColorCookie, newvalue);
             }
@@ -1050,37 +1012,28 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
             char info[64];
             menu.GetItem(param2, info, sizeof(info));
 
+            char newvalue[4];
+
             if(StrEqual(info, "enabled"))
             {
+
                 gB_ShowJumps[param1] = UpdateClientCookie(param1, gH_ShowJumpsCookie);
             }
-            else if(StrEqual(info, "increment"))
+            else if(StrEqual(info, "increment") || StrEqual(info, "decrement"))
             {
-                if(gI_JumpSize[param1] + 1 > MAX_JUMP_SIZE)
+                int value = (StrEqual(info, "increment")) ? 1 : -1;
+
+                gI_JumpSize[param1] += value;
+
+                if(gI_JumpSize[param1] > MAX_JUMP_SIZE)
                 {
                     gI_JumpSize[param1] = 1;
                 }
-                else
-                {
-                    gI_JumpSize[param1]++;
-                }
-
-                char newvalue[4];
-                IntToString(gI_JumpSize[param1], newvalue, sizeof(newvalue));
-                UpdateClientCookie(param1, gH_JumpSizeCookie, newvalue);
-            }
-            else if(StrEqual(info, "decrement"))
-            {
-                if(gI_JumpSize[param1] - 1 < 1)
+                else if(gI_JumpSize[param1] <= 0)
                 {
                     gI_JumpSize[param1] = MAX_JUMP_SIZE;
                 }
-                else
-                {
-                    gI_JumpSize[param1]--;
-                }
 
-                char newvalue[4];
                 IntToString(gI_JumpSize[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_JumpSizeCookie, newvalue);
             }
@@ -1101,7 +1054,6 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
                     gI_JumpsAhead[param1] = 0;
                 }
 
-                char newvalue[4];
                 IntToString(gI_JumpsAhead[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_JumpsAheadCookie, newvalue);
             }
@@ -1213,23 +1165,23 @@ stock void PrintDebug(const char[] message, any...)
 
 bool LoadReplayCache2(frame_cache_t cache, int track, const char[] path, const char[] mapname)
 {
-	bool success = false;
-	replay_header_t header;
-	File fFile = ReadReplayHeader(path, header);
+    bool success = false;
+    replay_header_t header;
+    File fFile = ReadReplayHeader(path, header);
 
-	if (fFile != null)
-	{
-		if (header.iReplayVersion > REPLAY_FORMAT_SUBVERSION)
-		{
-			// not going to try and read it
-		}
-		else if (header.iReplayVersion < 0x03 || (StrEqual(header.sMap, mapname, false) && header.iTrack == track))
-		{
-			success = ReadReplayFrames(fFile, header, cache);
-		}
+    if (fFile != null)
+    {
+        if (header.iReplayVersion > REPLAY_FORMAT_SUBVERSION)
+        {
+            // not going to try and read it
+        }
+        else if (header.iReplayVersion < 0x03 || (StrEqual(header.sMap, mapname, false) && header.iTrack == track))
+        {
+            success = ReadReplayFrames(fFile, header, cache);
+        }
 
-		delete fFile;
-	}
+        delete fFile;
+    }
 
-	return success;
+    return success;
 }
