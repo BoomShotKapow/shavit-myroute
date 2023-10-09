@@ -1,7 +1,7 @@
 <div align="center">
   <h1><code>shavit-myroute</code></h1>
   <p>
-    <strong>Short Description</strong>
+    <strong>Replay bot route path and allows for saving your segmented route and using it as your path to practice in normal.</strong>
   </p>
   <p style="margin-bottom: 0.5ex;">
     <img
