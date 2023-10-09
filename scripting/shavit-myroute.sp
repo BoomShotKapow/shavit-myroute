@@ -327,7 +327,7 @@ public void OnClientCookiesCached(int client)
     gI_PathColorIndex[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : -1;
 
     gH_PathOpacityCookie.Get(client, cookie, sizeof(cookie));
-    gI_PathOpacity[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 255;
+    gI_PathOpacity[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 250;
 
     gH_ShowJumpsCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowJumps[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
