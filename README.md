@@ -1,7 +1,7 @@
 <div align="center">
   <h1><code>shavit-myroute</code></h1>
   <p>
-    <strong>Replay bot route path and allows for saving your segmented route and using it as your path to practice in normal.</strong>
+    <strong>Customizable replay bot path for Shavit's that allows you to save and use personal replays as a route for practicing.</strong>
   </p>
   <p style="margin-bottom: 0.5ex;">
     <img
@@ -35,3 +35,9 @@
 ## Installation ##
 1. Grab the latest release from the release page and unzip it in your sourcemod folder.
 2. Restart the server or type `sm plugins load shavit-myroute` in the console to load the plugin.
+
+## Usage ##
+| Command | Description |
+| ----------- | ----------- |
+| `sm_route` | Route menu for customizing the display of the route. |
+| `sm_resetroute` | Resets the route path to the beginning. |
