@@ -16,9 +16,9 @@
 
 enum RouteType
 {
-    RouteType_Auto,             //use personal replay, otherwise use server record for the current style
-    RouteType_PersonalReplay,   //only use personal replay, disabled if one isn't already saved
-    RouteType_ServerRecord = 2, //use the server record for the current style
+    RouteType_Auto,           //use personal replay, otherwise use server record for the current style
+    RouteType_PersonalReplay, //only use personal replay, disabled if one isn't already saved
+    RouteType_ServerRecord,   //use the server record for the current style
     RouteType_Size
 };
 
@@ -74,6 +74,7 @@ Cookie gH_RouteTypeCookie = null;
 Cookie gH_ShowPathCookie = null;
 Cookie gH_PathSizeCookie = null;
 Cookie gH_PathColorCookie = null;
+Cookie gH_PathOpacityCookie = null;
 Cookie gH_ShowJumpsCookie = null;
 Cookie gH_JumpSizeCookie = null;
 Cookie gH_JumpMarkerColorCookie = null;
@@ -82,6 +83,7 @@ Cookie gH_JumpsAheadCookie = null;
 //Path settings
 int gI_PathColorIndex[MAXPLAYERS + 1] = {-1, ...};
 int gI_PathSize[MAXPLAYERS + 1] = {MAX_BEAM_WIDTH, ...};
+int gI_PathOpacity[MAXPLAYERS + 1] = {250, ...};
 
 //Jump marker settings
 int gI_JumpColorIndex[MAXPLAYERS + 1];
@@ -106,6 +108,7 @@ frame_cache_t gA_FrameCache[MAXPLAYERS + 1];
 ClosestPos gH_ClosestPos[MAXPLAYERS + 1];
 
 bool gB_Debug;
+bool gB_Late;
 bool gB_ReplayRecorder;
 bool gB_ReplayPlayback;
 bool gB_ClosestPos;
@@ -123,6 +126,13 @@ public Plugin myinfo =
     url         = "https://github.com/BoomShotKapow"
 };
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    gB_Late = late;
+
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
     gH_ShowRouteCookie = new Cookie("sm_myroute_enabled", "Toggles the display of the whole plugin.", CookieAccess_Protected);
@@ -130,6 +140,7 @@ public void OnPluginStart()
     gH_ShowPathCookie = new Cookie("sm_myroute_path", "Toggles the display of the route path beam.", CookieAccess_Protected);
     gH_PathSizeCookie = new Cookie("sm_myroute_path_size", "Sets the width of the route path beam.", CookieAccess_Protected);
     gH_PathColorCookie = new Cookie("sm_myroute_path_color", "Sets the color of the route path beam.", CookieAccess_Protected);
+    gH_PathOpacityCookie = new Cookie("sm_myroute_path_opacity", "Sets the opacity of the route path beam.", CookieAccess_Protected);
     gH_ShowJumpsCookie = new Cookie("sm_myroute_jump", "Toggles the display of the jump markers.", CookieAccess_Protected);
     gH_JumpSizeCookie = new Cookie("sm_myroute_jump_size", "Sets the size of the jump markers.", CookieAccess_Protected);
     gH_JumpMarkerColorCookie = new Cookie("sm_myroute_jump_color", "Sets the color of the jump markers.", CookieAccess_Protected);
@@ -146,29 +157,17 @@ public void OnPluginStart()
 
     gB_ReplayRecorder = LibraryExists("shavit-replay-recorder");
     gB_ReplayPlayback = LibraryExists("shavit-replay-playback");
+    gB_ClosestPos = LibraryExists("closestpos");
 
     if(gB_ReplayPlayback)
     {
-        Shavit_GetReplayFolderPath(gS_ReplayFolder, sizeof(gS_ReplayFolder));
+        Shavit_GetReplayFolderPath_Stock(gS_ReplayFolder);
     }
 
     gCV_NumAheadFrames = new Convar("smr_ahead_frames", "75", "Number of frames to draw ahead of the client.", 0, true, 0.0);
-    gCV_VelDiffScalar = new Convar("smr_veldiff_scalar", "0.10", "Scalar for velocity difference.", 0, true, 0.0);
+    gCV_VelDiffScalar = new Convar("smr_veldiff_scalar", "0.20", "Scalar for velocity difference.", 0, true, 0.0);
 
     Convar.AutoExecConfig();
-
-    for(int client = 1; client <= MaxClients; client++)
-    {
-        if(IsClientInGame(client))
-        {
-            OnClientPutInServer(client);
-
-            if(AreClientCookiesCached(client))
-            {
-                OnClientCookiesCached(client);
-            }
-        }
-    }
 }
 
 public void OnAllPluginsLoaded()
@@ -187,7 +186,7 @@ public void OnAllPluginsLoaded()
     }
     else if(!gB_ClosestPos)
     {
-        LogError("Closestpos is highly recommended for this plugin!");
+        SetFailState("closestpos is required for this plugin!");
     }
 
     Shavit_GetReplayFolderPath(gS_ReplayFolder, sizeof(gS_ReplayFolder));
@@ -227,13 +226,30 @@ public void OnLibraryRemoved(const char[] name)
 
 public void OnMapStart()
 {
-    GetCurrentMap(gS_Map, sizeof(gS_Map));
-    GetMapDisplayName(gS_Map, gS_Map, sizeof(gS_Map));
-    LowercaseString(gS_Map);
+    GetLowercaseMapName(gS_Map);
 
-    for(int client = 1; client <= MaxClients; client++)
+    if(gB_Late)
     {
-        LoadMyRoute(client);
+        gB_Late = false;
+
+        for(int i = 1; i <= MaxClients; i++)
+        {
+            if(IsValidClient(i))
+            {
+                OnClientPutInServer(i);
+            }
+        }
+    }
+}
+
+public void OnMapEnd()
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        if(gA_JumpMarkerCache[i] != null)
+        {
+            delete gA_JumpMarkerCache[i];
+        }
     }
 }
 
@@ -244,6 +260,11 @@ public void OnConfigsExecuted()
 
 public void OnClientPutInServer(int client)
 {
+    if(IsFakeClient(client))
+    {
+        return;
+    }
+
     gB_LoadedReplay[client] = false;
     gB_ShowRoute[client] = true;
     gRT_RouteType[client] = RouteType_Auto;
@@ -261,10 +282,21 @@ public void OnClientPutInServer(int client)
     {
         OnClientCookiesCached(client);
     }
-    else
+
+    if(IsClientAuthorized(client))
     {
-        LoadMyRoute(client);
+        OnClientAuthorized(client, "");
     }
+}
+
+public void OnClientAuthorized(int client, const char[] auth)
+{
+    if(IsFakeClient(client))
+    {
+        return;
+    }
+
+    LoadMyRoute(client);
 }
 
 public void OnClientDisconnect(int client)
@@ -279,79 +311,35 @@ public void OnClientCookiesCached(int client)
 {
     char cookie[4];
 
-    if(gH_ShowRouteCookie != null)
-    {
-        gH_ShowRouteCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_ShowRouteCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowRoute[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
-    cookie[0] = '\0';
 
-    if(gH_RouteTypeCookie != null)
-    {
-        gH_RouteTypeCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_RouteTypeCookie.Get(client, cookie, sizeof(cookie));
     gRT_RouteType[client] = (strlen(cookie) > 0) ? view_as<RouteType>(StringToInt(cookie)) : RouteType_Auto;
-    cookie[0] = '\0';
 
-    if(gH_ShowPathCookie != null)
-    {
-        gH_ShowPathCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_ShowPathCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowPath[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
-    cookie[0] = '\0';
 
-    if(gH_PathSizeCookie != null)
-    {
-        gH_PathSizeCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_PathSizeCookie.Get(client, cookie, sizeof(cookie));
     gI_PathSize[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : MAX_BEAM_WIDTH;
-    cookie[0] = '\0';
 
-    if(gH_PathColorCookie != null)
-    {
-        gH_PathColorCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_PathColorCookie.Get(client, cookie, sizeof(cookie));
     gI_PathColorIndex[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : -1;
-    cookie[0] = '\0';
 
-    if(gH_ShowJumpsCookie != null)
-    {
-        gH_ShowJumpsCookie.Get(client, cookie, sizeof(cookie));
-    }
+    gH_PathOpacityCookie.Get(client, cookie, sizeof(cookie));
+    gI_PathOpacity[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 255;
 
+    gH_ShowJumpsCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowJumps[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
-    cookie[0] = '\0';
 
-    if(gH_JumpSizeCookie != null)
-    {
-        gH_JumpSizeCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_JumpSizeCookie.Get(client, cookie, sizeof(cookie));
     gI_JumpSize[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : MAX_JUMP_SIZE;
-    cookie[0] = '\0';
 
-    if(gH_JumpMarkerColorCookie != null)
-    {
-        gH_JumpMarkerColorCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_JumpMarkerColorCookie.Get(client, cookie, sizeof(cookie));
     gI_JumpColorIndex[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : view_as<int>(WHITE);
-    cookie[0] = '\0';
 
-    if(gH_JumpsAheadCookie != null)
-    {
-        gH_JumpsAheadCookie.Get(client, cookie, sizeof(cookie));
-    }
-
+    gH_JumpsAheadCookie.Get(client, cookie, sizeof(cookie));
     gI_JumpsAhead[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 0;
-    cookie[0] = '\0';
-
-    LoadMyRoute(client);
 }
 
 bool GetMyRoute(int client)
@@ -502,12 +490,12 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
     gA_FrameCache[client].aFrames.GetArray(lookAhead, replay_frame, sizeof(frame_t));
     gA_FrameCache[client].aFrames.GetArray(lookAhead <= 0 ? 0 : lookAhead - 1, replay_prevframe, sizeof(frame_t));
 
-    DrawMyRoute(client, replay_prevframe, replay_frame);
+    DrawMyRoute(client, replay_prevframe, replay_frame, GetVelocityDifference(client, iClosestFrame));
 }
 
-void DrawMyRoute(int client, frame_t prev, frame_t cur)
+void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
 {
-    UpdateColor(client);
+    UpdateColor(client, velDiff);
 
     //Draw the client's routed path
     if(gB_ShowPath[client])
@@ -517,17 +505,6 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur)
 
     if(!gB_ShowJumps[client] || gA_JumpMarkerCache[client].Length < 1)
     {
-        return;
-    }
-    else if(gI_JumpsAhead[client] == 0)
-    {
-        if(IsJump(prev, cur))
-        {
-            JumpMarker marker;
-            marker.Initialize(cur, gI_JumpSize[client], -1, -1);
-            marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
-        }
-
         return;
     }
 
@@ -548,37 +525,44 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur)
     }
 
     JumpMarker marker;
+    gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client], marker, sizeof(marker));
+    marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
+
+    if(gI_JumpsAhead[client] == 0)
+    {
+        return;
+    }
 
     int max = gA_JumpMarkerCache[client].Length;
 
     //For loop too expensive to use for every frame, so we hardcode the number of jumps ahead to draw
-    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 4) && gI_JumpsIndex[client] < max)
-    {
-        gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client], marker, sizeof(marker));
-        marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
-    }
-
-    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 3) && (gI_JumpsIndex[client] + 1 < max))
+    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 4) && gI_JumpsIndex[client] + 1 < max)
     {
         gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client] + 1, marker, sizeof(marker));
         marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
     }
 
-    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 2) && (gI_JumpsIndex[client] + 2 < max))
+    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 3) && (gI_JumpsIndex[client] + 2 < max))
     {
         gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client] + 2, marker, sizeof(marker));
         marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
     }
 
-    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 1) && (gI_JumpsIndex[client] + 3 < max))
+    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 2) && (gI_JumpsIndex[client] + 3 < max))
     {
         gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client] + 3, marker, sizeof(marker));
         marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
     }
 
-    if(gI_JumpsAhead[client] >= MAX_JUMPS_AHEAD && (gI_JumpsIndex[client] + 4 < max))
+    if(gI_JumpsAhead[client] >= (MAX_JUMPS_AHEAD - 1) && (gI_JumpsIndex[client] + 4 < max))
     {
         gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client] + 4, marker, sizeof(marker));
+        marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
+    }
+
+    if(gI_JumpsAhead[client] >= MAX_JUMPS_AHEAD && (gI_JumpsIndex[client] + 5 < max))
+    {
+        gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client] + 5, marker, sizeof(marker));
         marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
     }
 }
@@ -586,6 +570,18 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur)
 bool IsJump(frame_t prev, frame_t cur)
 {
     return (!(cur.flags & FL_ONGROUND) && (prev.flags & FL_ONGROUND));
+}
+
+public void Shavit_OnTrackChanged(int client, int oldtrack, int newtrack)
+{
+    if(oldtrack != newtrack || gRT_RouteType[client] == RouteType_ServerRecord)
+    {
+        LoadMyRoute(client);
+    }
+    else
+    {
+        ResetMyRoute(client);
+    }
 }
 
 public void Shavit_OnStyleChanged(int client, int oldstyle, int newstyle, int track, bool manual)
@@ -614,13 +610,6 @@ public void Shavit_OnWorldRecord(int client, int style, float time, int jumps, i
         }
         else if(gRT_RouteType[i] == RouteType_PersonalReplay && i != client)
         {
-            continue;
-        }
-
-        char steamID[64];
-        if(!GetClientAuthId(i, AuthId_Steam3, steamID, sizeof(steamID)))
-        {
-            LogError("Failed to authenticate [%N]!", i);
             continue;
         }
 
@@ -666,15 +655,14 @@ void ResetMyRoute(int client, bool closestFrame = false)
         iClosestFrame = GetClientClosestFrame(client);
     }
 
-    if(!closestFrame)
+    if(closestFrame)
     {
-        gI_Color[client] = gI_ColorIndex[view_as<int>(GREEN)];
-    }
-    else
-    {
-        UpdateColor(client);
+        UpdateColor(client, GetVelocityDifference(client, iClosestFrame));
+
+        return;
     }
 
+    gI_Color[client] = gI_ColorIndex[view_as<int>(GREEN)];
     gI_PrevStep[client] = 0;
     gI_PrevFrame[client] = iClosestFrame;
     gI_JumpsIndex[client] = 0;
@@ -699,9 +687,8 @@ public void BeamEffect(int client, float start[3], float end[3], float duration,
     TE_SendToClient(client);
 }
 
-void UpdateColor(int client)
+void UpdateColor(int client, float velDiff)
 {
-    float velDiff = Shavit_GetClosestReplayVelocityDifference(client, false);
     int stepsize = RoundToFloor(velDiff * gCV_VelDiffScalar.FloatValue);
 
     //Prevent the color from changing too fast
@@ -713,9 +700,10 @@ void UpdateColor(int client)
     gI_PrevStep[client] = stepsize;
 
     //Positive/Negative step size means client is faster/slower than the replay
-    gI_Color[client][0] -= stepsize; //r (red), positive/negative step size decreases/increases the value of red
-    gI_Color[client][1] += stepsize; //g (green), positive/negative step size increases/decreases the value of green
-    gI_Color[client][2] = 0;         //b (blue)
+    gI_Color[client][0] -= stepsize;              //r (red), positive/negative step size decreases/increases the value of red
+    gI_Color[client][1] += stepsize;              //g (green), positive/negative step size increases/decreases the value of green
+    gI_Color[client][2] = 0;                      //b (blue)
+    gI_Color[client][3] = gI_PathOpacity[client]; //a (alpha)
 
     if(gI_Color[client][0] <= 0)
     {
@@ -736,6 +724,24 @@ void UpdateColor(int client)
     }
 }
 
+float GetVelocityDifference(int client, int frame)
+{
+    float clientVel[3];
+    GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", clientVel);
+
+    float fReplayPrevPos[3], fReplayClosestPos[3];
+    gA_FrameCache[client].aFrames.GetArray(frame, fReplayClosestPos, 3);
+    gA_FrameCache[client].aFrames.GetArray(frame <= 0 ? 0 : frame - 1, fReplayPrevPos, 3);
+
+    int style = Shavit_GetBhopStyle(client);
+
+    float replayVel[3];
+    MakeVectorFromPoints(fReplayClosestPos, fReplayPrevPos, replayVel);
+    ScaleVector(replayVel, (1.0 / GetTickInterval()) / Shavit_GetStyleSettingFloat(style, "speed") / Shavit_GetStyleSettingFloat(style, "timescale"));
+
+    return (SquareRoot(Pow(clientVel[0], 2.0) + Pow(clientVel[1], 2.0))) - (SquareRoot(Pow(replayVel[0], 2.0) + Pow(replayVel[1], 2.0)));
+}
+
 void GetClientRouteType(int client, char[] buffer, int length)
 {
     switch(gRT_RouteType[client])
@@ -753,6 +759,22 @@ void GetClientRouteType(int client, char[] buffer, int length)
         case RouteType_ServerRecord:
         {
             strcopy(buffer, length, "Server Record");
+        }
+    }
+}
+
+void GetPathType(int client, char[] buffer, int length)
+{
+    switch(gI_PathColorIndex[client])
+    {
+        case -1:
+        {
+            strcopy(buffer, length, "Velocity Difference");
+        }
+
+        default:
+        {
+            strcopy(buffer, length, "Solid Color");
         }
     }
 }
@@ -848,20 +870,8 @@ bool CreatePathSettingsMenu(int client, int page = 0)
     menu.AddItem("enabled", gB_ShowPath[client] ? "[X] Enabled" : "[ ] Enabled");
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
 
-    FormatEx(display, sizeof(display), "Size: [%d]", gI_PathSize[client]);
-    menu.AddItem("path_size", display, ITEMDRAW_DISABLED);
-    menu.AddItem("increment", "++ Path Size ++");
-    menu.AddItem("decrement", "-- Path Size --");
-
     char type[32];
-    if(gI_PathColorIndex[client] == -1)
-    {
-        strcopy(type, sizeof(type), "Velocity Difference");
-    }
-    else
-    {
-        strcopy(type, sizeof(type), "Solid Color");
-    }
+    GetPathType(client, type, sizeof(type));
 
     FormatEx(display, sizeof(display), "Path Type: [%s]", type);
     menu.AddItem("path_type", display);
@@ -870,6 +880,18 @@ bool CreatePathSettingsMenu(int client, int page = 0)
     {
         menu.AddItem("path_color", "[Path Colors]");
     }
+
+    menu.AddItem("-1", "", ITEMDRAW_SPACER);
+
+    FormatEx(display, sizeof(display), "Size: [%d]", gI_PathSize[client]);
+    menu.AddItem("path_size", display, ITEMDRAW_DISABLED);
+    menu.AddItem("increment", "++ Path Size ++");
+    menu.AddItem("decrement", "-- Path Size --");
+
+    FormatEx(display, sizeof(display), "Opacity: [%d]", gI_PathOpacity[client]);
+    menu.AddItem("path_opacity", display, ITEMDRAW_DISABLED);
+    menu.AddItem("opacity_increment", "++ Path Opacity ++");
+    menu.AddItem("opacity_decrement", "-- Path Opacity --");
 
     menu.ExitBackButton = true;
     return menu.DisplayAt(client, page, MENU_TIME_FOREVER);
@@ -927,6 +949,24 @@ public int PathSettings_MenuHandler(Menu menu, MenuAction action, int param1, in
                 CreateColorMenu(param1, view_as<Color>(gI_PathColorIndex[param1]), PathColor_MenuHandler);
 
                 return 0;
+            }
+            else if(StrEqual(info, "opacity_increment") || StrEqual(info, "opacity_decrement"))
+            {
+                int value = (StrEqual(info, "opacity_increment")) ? 50 : -50;
+
+                gI_PathOpacity[param1] += value;
+
+                if(gI_PathOpacity[param1] > 250)
+                {
+                    gI_PathOpacity[param1] = 0;
+                }
+                else if(gI_PathOpacity[param1] < 0)
+                {
+                    gI_PathOpacity[param1] = 250;
+                }
+
+                IntToString(gI_PathOpacity[param1], newvalue, sizeof(newvalue));
+                UpdateClientCookie(param1, gH_PathOpacityCookie, newvalue);
             }
 
             CreatePathSettingsMenu(param1, menu.Selection);
@@ -1054,6 +1094,8 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
                     gI_JumpsAhead[param1] = 0;
                 }
 
+                PrintDebug("Jumps Ahead: [%d]", gI_JumpsAhead[param1]);
+
                 IntToString(gI_JumpsAhead[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_JumpsAheadCookie, newvalue);
             }
@@ -1140,7 +1182,7 @@ public Action Command_Debug(int client, int args)
     return Plugin_Handled;
 }
 
-stock void PrintDebug(const char[] message, any...)
+stock void PrintDebug(const char[] message, any ...)
 {
     if(!gB_Debug)
     {
@@ -1150,15 +1192,23 @@ stock void PrintDebug(const char[] message, any...)
     char buffer[255];
     VFormat(buffer, sizeof(buffer), message, 2);
 
-    PrintToServer(buffer);
+    if(strlen(buffer) >= 255)
+    {
+        PrintToServer(buffer);
+    }
 
-    for (int client = 1; client <= MaxClients; client++)
+    for(int client = 1; client <= MaxClients; client++)
     {
         if(IsClientConnected(client) && CheckCommandAccess(client, "sm_myroute_debug", ADMFLAG_ROOT))
         {
-            PrintToChat(client, buffer);
-            PrintToConsole(client, buffer);
-            return;
+            if(strlen(buffer) >= 255)
+            {
+                PrintToConsole(client, buffer);
+            }
+            else
+            {
+                PrintToChat(client, buffer);
+            }
         }
     }
 }
