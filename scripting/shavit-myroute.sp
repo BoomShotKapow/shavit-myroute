@@ -37,19 +37,13 @@ enum struct JumpMarker
         this.id = id;
         this.frameNum = frameNum;
 
-        float* pos = frame.pos;
-        float jumpOffset = pos[2];
         for (int i = 0; i < 3; ++i)
         {
-            this.line1[i] = pos[i] + jumpSize;
-            this.line2[i] = pos[i] - jumpSize;
-            this.line3[i] = pos[i] - jumpSize;
-            this.line4[i] = pos[i] + jumpSize;
+            this.line1[i] = frame.pos[i] + jumpSize;
+            this.line2[i] = frame.pos[i] - jumpSize;
+            this.line3[i] = frame.pos[i] - jumpSize;
+            this.line4[i] = frame.pos[i] + jumpSize;
         }
-        this.line1[2] = jumpOffset;
-        this.line2[2] = jumpOffset;
-        this.line3[2] = jumpOffset;
-        this.line4[2] = jumpOffset;
     }
 
     void Draw(int client, int color[4])
