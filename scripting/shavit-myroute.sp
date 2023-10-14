@@ -1,5 +1,6 @@
 #include <sourcemod>
-#include <shavit>
+#include <shavit/core>
+#include <shavit/replay-playback>
 #include <convar_class>
 #include <clientprefs>
 #include <closestpos>
@@ -123,7 +124,7 @@ public Plugin myinfo =
     name        = "shavit - Personal Route",
     author      = "BoomShot",
     description = "Lets players create their route and use it for practice.",
-    version     = "1.0.0",
+    version     = "1.0.1",
     url         = "https://github.com/BoomShotKapow"
 };
 
@@ -263,7 +264,7 @@ public void OnMapEnd()
     {
         if(gA_JumpMarkerCache[i] != null)
         {
-            delete gA_JumpMarkerCache[i];
+            gA_JumpMarkerCache[i].Clear();
         }
     }
 }
@@ -281,17 +282,19 @@ public void OnClientPutInServer(int client)
     }
 
     gB_LoadedReplay[client] = false;
-    gB_ShowRoute[client] = true;
     gRT_RouteType[client] = RouteType_Auto;
+    gB_ShowRoute[client] = true;
     gB_ShowPath[client] = true;
     gB_ShowJumps[client] = true;
 
-    if(gA_JumpMarkerCache[client] != null)
+    if(gA_JumpMarkerCache[client] == null)
     {
-        delete gA_JumpMarkerCache[client];
+        gA_JumpMarkerCache[client] = new ArrayList(sizeof(JumpMarker));
     }
-
-    gA_JumpMarkerCache[client] = new ArrayList(sizeof(JumpMarker));
+    else
+    {
+        gA_JumpMarkerCache[client].Clear();
+    }
 
     if(AreClientCookiesCached(client))
     {
@@ -316,9 +319,11 @@ public void OnClientAuthorized(int client, const char[] auth)
 
 public void OnClientDisconnect(int client)
 {
+    gB_LoadedReplay[client] = false;
+
     if(gA_JumpMarkerCache[client] != null)
     {
-        delete gA_JumpMarkerCache[client];
+        gA_JumpMarkerCache[client].Clear();
     }
 }
 
@@ -408,18 +413,18 @@ bool LoadMyRoute(int client)
         return false;
     }
 
+    if(gA_JumpMarkerCache[client] == null)
+    {
+        gA_JumpMarkerCache[client] = new ArrayList(sizeof(JumpMarker));
+    }
+    else
+    {
+        gA_JumpMarkerCache[client].Clear();
+    }
+
     if(gA_FrameCache[client].aFrames != null && gA_FrameCache[client].aFrames.Length > 0)
     {
         gH_ClosestPos[client] = new ClosestPos(gA_FrameCache[client].aFrames, 0, gA_FrameCache[client].iPreFrames, gA_FrameCache[client].iFrameCount);
-
-        if(gA_JumpMarkerCache[client] == null)
-        {
-            gA_JumpMarkerCache[client] = new ArrayList(sizeof(JumpMarker));
-        }
-        else
-        {
-            gA_JumpMarkerCache[client].Clear();
-        }
 
         int markerId;
 
@@ -518,7 +523,7 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
         BeamEffect(client, prev.pos, cur.pos, 0.7, gI_PathSize[client] / float(MAX_BEAM_WIDTH), gI_PathColorIndex[client] == -1 ? gI_Color[client] : gI_ColorIndex[gI_PathColorIndex[client]]);
     }
 
-    if(!gB_ShowJumps[client] || gA_JumpMarkerCache[client].Length < 1)
+    if(!gB_ShowJumps[client] || (gA_JumpMarkerCache[client] != null && gA_JumpMarkerCache[client].Length < 1))
     {
         return;
     }
@@ -589,26 +594,12 @@ bool IsJump(frame_t prev, frame_t cur)
 
 public void Shavit_OnTrackChanged(int client, int oldtrack, int newtrack)
 {
-    if(oldtrack != newtrack || gRT_RouteType[client] == RouteType_ServerRecord)
-    {
-        LoadMyRoute(client);
-    }
-    else
-    {
-        ResetMyRoute(client);
-    }
+    LoadMyRoute(client);
 }
 
 public void Shavit_OnStyleChanged(int client, int oldstyle, int newstyle, int track, bool manual)
 {
-    if(oldstyle != newstyle || gRT_RouteType[client] == RouteType_ServerRecord)
-    {
-        LoadMyRoute(client);
-    }
-    else
-    {
-        ResetMyRoute(client);
-    }
+    LoadMyRoute(client);
 }
 
 public void Shavit_OnWorldRecord(int client, int style, float time, int jumps, int strafes, float sync, int track, float oldwr, float oldtime, float perfs, float avgvel, float maxvel, int timestamp)
