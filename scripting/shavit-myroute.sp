@@ -109,6 +109,7 @@ ClosestPos gH_ClosestPos[MAXPLAYERS + 1];
 
 bool gB_Debug;
 bool gB_Late;
+bool gB_MyReplay;
 bool gB_ReplayRecorder;
 bool gB_ReplayPlayback;
 bool gB_ClosestPos;
@@ -155,6 +156,7 @@ public void OnPluginStart()
 
     RegAdminCmd("sm_myroute_debug", Command_Debug, ADMFLAG_ROOT);
 
+    gB_MyReplay = LibraryExists("shavit-myreplay");
     gB_ReplayRecorder = LibraryExists("shavit-replay-recorder");
     gB_ReplayPlayback = LibraryExists("shavit-replay-playback");
     gB_ClosestPos = LibraryExists("closestpos");
@@ -172,11 +174,16 @@ public void OnPluginStart()
 
 public void OnAllPluginsLoaded()
 {
+    gB_MyReplay = LibraryExists("shavit-myreplay");
     gB_ReplayRecorder = LibraryExists("shavit-replay-recorder");
     gB_ReplayPlayback = LibraryExists("shavit-replay-playback");
     gB_ClosestPos = LibraryExists("closestpos");
 
-    if(!gB_ReplayRecorder)
+    if(!gB_MyReplay)
+    {
+        SetFailState("shavit-myreplay is required for this plugin!");
+    }
+    else if(!gB_ReplayRecorder)
     {
         SetFailState("shavit-replay-recorder is required for this plugin!");
     }
@@ -194,7 +201,11 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryAdded(const char[] name)
 {
-    if(StrEqual(name, "shavit-replay-recorder"))
+    if(StrEqual(name, "shavit-myreplay"))
+    {
+        gB_MyReplay = true;
+    }
+    else if(StrEqual(name, "shavit-replay-recorder"))
     {
         gB_ReplayRecorder = true;
     }
@@ -210,7 +221,11 @@ public void OnLibraryAdded(const char[] name)
 
 public void OnLibraryRemoved(const char[] name)
 {
-    if(StrEqual(name, "shavit-replay-recorder"))
+    if(StrEqual(name, "shavit-myreplay"))
+    {
+        gB_MyReplay = false;
+    }
+    else if(StrEqual(name, "shavit-replay-recorder"))
     {
         gB_ReplayRecorder = false;
     }
