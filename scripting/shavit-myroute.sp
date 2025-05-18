@@ -380,8 +380,14 @@ bool GetMyRoute(int client)
 
     RouteType routeType = gRT_RouteType[client];
 
+    PersonalReplay replay;
+    Shavit_GetPersonalReplay(client, replay, sizeof(replay));
+
+    replay_header_t header;
+    replay.GetHeader(header);
+
     //Set the player's route path to the server record
-    if(routeType == RouteType_ServerRecord || (!FileExists(gS_ReplayPath[client]) && routeType == RouteType_Auto))
+    if(routeType == RouteType_ServerRecord || (!FileExists(gS_ReplayPath[client]) && routeType == RouteType_Auto) || header.iTrack != Shavit_GetClientTrack(client))
     {
         Shavit_GetReplayFilePath(Shavit_GetBhopStyle(client), Shavit_GetClientTrack(client), gS_Map, gS_ReplayFolder, gS_ReplayPath[client]);
     }
