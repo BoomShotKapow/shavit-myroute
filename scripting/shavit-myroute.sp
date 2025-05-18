@@ -544,14 +544,14 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
         }
     }
 
-    JumpMarker marker;
-    gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client], marker, sizeof(marker));
-    marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
-
-    if(gI_JumpsAhead[client] == 0)
+    if(gI_JumpsIndex[client] >= gA_JumpMarkerCache[client].Length || gI_JumpsAhead[client] == 0)
     {
         return;
     }
+
+    JumpMarker marker;
+    gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client], marker, sizeof(marker));
+    marker.Draw(client, gI_ColorIndex[gI_JumpColorIndex[client]]);
 
     int max = gA_JumpMarkerCache[client].Length;
 
@@ -1062,7 +1062,6 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
 
             if(StrEqual(info, "enabled"))
             {
-
                 gB_ShowJumps[param1] = UpdateClientCookie(param1, gH_ShowJumpsCookie);
             }
             else if(StrEqual(info, "increment") || StrEqual(info, "decrement"))
