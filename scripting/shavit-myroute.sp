@@ -169,7 +169,7 @@ public void OnPluginStart()
     }
 
     gCV_NumAheadFrames = new Convar("smr_ahead_frames", "75", "Number of frames to draw ahead of the client.", 0, true, 0.0);
-    gCV_VelDiffScalar = new Convar("smr_veldiff_scalar", "0.20", "Scalar for velocity difference.", 0, true, 0.0);
+    gCV_VelDiffScalar = new Convar("smr_veldiff_scalar", "1", "Scalar for velocity difference.", 0, true, 0.0);
 
     Convar.AutoExecConfig();
 }
@@ -668,6 +668,8 @@ void ResetMyRoute(int client, bool closestFrame = false)
         iClosestFrame = GetClientClosestFrame(client);
     }
 
+    gI_Color[client] = gI_ColorIndex[view_as<int>(GREEN)];
+
     if(closestFrame)
     {
         UpdateColor(client, GetVelocityDifference(client, iClosestFrame));
@@ -675,7 +677,6 @@ void ResetMyRoute(int client, bool closestFrame = false)
         return;
     }
 
-    gI_Color[client] = gI_ColorIndex[view_as<int>(GREEN)];
     gI_PrevStep[client] = 0;
     gI_PrevFrame[client] = iClosestFrame;
     gI_JumpsIndex[client] = 0;
