@@ -152,6 +152,7 @@ public void OnPluginStart()
     RegConsoleCmd("sm_path", Command_Route, "Shows the menu for customizing the display of the route.");
     RegConsoleCmd("sm_botpath", Command_Route, "Shows the menu for customizing the display of the route.");
     RegConsoleCmd("sm_routepath", Command_Route, "Shows the menu for customizing the display of the route.");
+    RegConsoleCmd("sm_line", Command_Route, "Shows the menu for customizing the display of the route.");
 
     RegConsoleCmd("sm_resetroute", Command_ResetRoute, "Resets the route path to the beginning.");
 
