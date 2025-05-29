@@ -72,6 +72,7 @@ Convar gCV_VelDiffScalar = null;
 
 Cookie gH_ShowRouteCookie = null;
 Cookie gH_RouteTypeCookie = null;
+Cookie gH_StyleCookie = null;
 Cookie gH_ShowPathCookie = null;
 Cookie gH_PathSizeCookie = null;
 Cookie gH_PathColorCookie = null;
@@ -80,6 +81,8 @@ Cookie gH_ShowJumpsCookie = null;
 Cookie gH_JumpSizeCookie = null;
 Cookie gH_JumpMarkerColorCookie = null;
 Cookie gH_JumpsAheadCookie = null;
+
+int gI_Style[MAXPLAYERS + 1] = {-1, ...};
 
 //Path settings
 int gI_PathColorIndex[MAXPLAYERS + 1] = {-1, ...};
@@ -139,6 +142,7 @@ public void OnPluginStart()
 {
     gH_ShowRouteCookie = new Cookie("sm_myroute_enabled", "Toggles the display of the whole plugin.", CookieAccess_Protected);
     gH_RouteTypeCookie = new Cookie("sm_myroute_type", "Defines the route type for the replay path.", CookieAccess_Protected);
+    gH_StyleCookie = new Cookie("sm_myroute_style", "Sets the style of the server record to use for the route path.", CookieAccess_Protected);
     gH_ShowPathCookie = new Cookie("sm_myroute_path", "Toggles the display of the route path beam.", CookieAccess_Protected);
     gH_PathSizeCookie = new Cookie("sm_myroute_path_size", "Sets the width of the route path beam.", CookieAccess_Protected);
     gH_PathColorCookie = new Cookie("sm_myroute_path_color", "Sets the color of the route path beam.", CookieAccess_Protected);
@@ -284,6 +288,7 @@ public void OnClientPutInServer(int client)
 
     gB_LoadedReplay[client] = false;
     gRT_RouteType[client] = RouteType_Auto;
+    gI_Style[client] = -1;
     gB_ShowRoute[client] = true;
     gB_ShowPath[client] = true;
     gB_ShowJumps[client] = true;
@@ -338,6 +343,14 @@ public void OnClientCookiesCached(int client)
     gH_RouteTypeCookie.Get(client, cookie, sizeof(cookie));
     gRT_RouteType[client] = (strlen(cookie) > 0) ? view_as<RouteType>(StringToInt(cookie)) : RouteType_Auto;
 
+    gH_StyleCookie.Get(client, cookie, sizeof(cookie));
+    gI_Style[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : -1;
+
+    if(gRT_RouteType[client] != RouteType_ServerRecord)
+    {
+        gI_Style[client] = -1;
+    }
+
     gH_ShowPathCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowPath[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
 
@@ -390,7 +403,12 @@ bool GetMyRoute(int client)
     //Set the player's route path to the server record
     if(routeType == RouteType_ServerRecord || (!FileExists(gS_ReplayPath[client]) && routeType == RouteType_Auto) || header.iTrack != Shavit_GetClientTrack(client))
     {
-        Shavit_GetReplayFilePath(Shavit_GetBhopStyle(client), Shavit_GetClientTrack(client), gS_Map, gS_ReplayFolder, gS_ReplayPath[client]);
+        Shavit_GetReplayFilePath(gI_Style[client] == -1 ? Shavit_GetBhopStyle(client) : gI_Style[client], Shavit_GetClientTrack(client), gS_Map, gS_ReplayFolder, gS_ReplayPath[client]);
+
+        if(!FileExists(gS_ReplayPath[client]))
+        {
+            return false;
+        }
     }
 
     char type[16];
@@ -847,16 +865,28 @@ bool CreateMyRouteMenu(int client, int page = 0)
     Menu menu = new Menu(MyRoute_MenuHandler);
     menu.SetTitle("Route Settings:\n");
 
+    menu.AddItem("enabled", gB_ShowRoute[client] ? "[X] Enabled" : "[ ] Enabled");
+    menu.AddItem("-1", "", ITEMDRAW_SPACER);
+
     char type[16];
     GetClientRouteType(client, type, sizeof(type));
-
-    menu.AddItem("enabled", gB_ShowRoute[client] ? "[X] Enabled" : "[ ] Enabled");
 
     char display[64];
     FormatEx(display, sizeof(display), "[%s]", type);
 
     menu.AddItem("type", display);
+
+    if(gRT_RouteType[client] == RouteType_ServerRecord)
+    {
+        char styleName[64];
+        Shavit_GetStyleStrings(gI_Style[client] == -1 ? 0 : gI_Style[client], sStyleName, styleName, sizeof(styleName));
+        FormatEx(display, sizeof(display), "[%s]", styleName);
+
+        menu.AddItem("style", display);
+    }
+
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
+
     menu.AddItem("pathsettings", "[Path Settings]");
     menu.AddItem("jumpmarker", "[Jump Marker]");
 
@@ -875,7 +905,6 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
             if(StrEqual(info, "enabled"))
             {
                 gB_ShowRoute[param1] = UpdateClientCookie(param1, gH_ShowRouteCookie);
-                CreateMyRouteMenu(param1);
             }
             else if(StrEqual(info, "type"))
             {
@@ -884,13 +913,33 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
                     gRT_RouteType[param1] = RouteType_Auto;
                 }
 
+                if(gRT_RouteType[param1] == RouteType_ServerRecord)
+                {
+                    gI_Style[param1] = 0;
+                }
+                else
+                {
+                    gI_Style[param1] = -1;
+                }
+
                 char newvalue[4];
                 IntToString(view_as<int>(gRT_RouteType[param1]), newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_RouteTypeCookie, newvalue);
 
                 LoadMyRoute(param1);
+            }
+            else if(StrEqual(info, "style"))
+            {
+                if(++gI_Style[param1] >= Shavit_GetStyleCount())
+                {
+                    gI_Style[param1] = 0;
+                }
 
-                CreateMyRouteMenu(param1);
+                char newvalue[4];
+                IntToString(view_as<int>(gI_Style[param1]), newvalue, sizeof(newvalue));
+                UpdateClientCookie(param1, gH_StyleCookie, newvalue);
+
+                LoadMyRoute(param1);
             }
             else if(StrEqual(info, "pathsettings"))
             {
@@ -899,6 +948,11 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
             else if(StrEqual(info, "jumpmarker"))
             {
                 CreateJumpMarkersMenu(param1);
+            }
+
+            if(StrEqual(info, "enabled") || StrEqual(info, "type") || StrEqual(info, "style"))
+            {
+                CreateMyRouteMenu(param1);
             }
         }
     }
