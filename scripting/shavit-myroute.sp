@@ -935,6 +935,27 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
                     gI_Style[param1] = 0;
                 }
 
+                char tempPath[PLATFORM_MAX_PATH];
+
+                //Only show styles that have a replay
+                for(int i = gI_Style[param1]; i < Shavit_GetStyleCount(); i++)
+                {
+                    if(i == Shavit_GetStyleCount() - 1)
+                    {
+                        gI_Style[param1] = 0;
+                    }
+
+                    Shavit_GetReplayFilePath(i, Shavit_GetClientTrack(param1), gS_Map, gS_ReplayFolder, tempPath);
+
+                    PrintDebug("Checking for replay: [%s]", tempPath);
+
+                    if(FileExists(tempPath))
+                    {
+                        gI_Style[param1] = i;
+                        break;
+                    }
+                }
+
                 char newvalue[4];
                 IntToString(view_as<int>(gI_Style[param1]), newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_StyleCookie, newvalue);
