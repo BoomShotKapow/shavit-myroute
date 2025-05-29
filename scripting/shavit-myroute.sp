@@ -124,7 +124,7 @@ public Plugin myinfo =
     name        = "shavit - Personal Route",
     author      = "BoomShot",
     description = "Lets players create their route and use it for practice.",
-    version     = "1.0.2",
+    version     = "1.0.3",
     url         = "https://github.com/BoomShotKapow"
 };
 
