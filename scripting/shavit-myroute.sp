@@ -405,6 +405,11 @@ bool LoadMyRoute(int client)
 {
     gB_LoadedReplay[client] = false;
 
+    if(gA_FrameCache[client].aFrames != null)
+    {
+        gA_FrameCache[client].aFrames.Clear();
+    }
+
     if(!IsValidClient(client) || IsFakeClient(client) || !GetMyRoute(client))
     {
         return false;
