@@ -654,6 +654,28 @@ public void Shavit_OnPersonalReplayDeleted(int client)
     LoadMyRoute(client);
 }
 
+public void Shavit_OnWRDeleted(int style, int id, int track, int accountid, const char[] mapname)
+{
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        if(!IsValidClient(i) || IsFakeClient(i))
+        {
+            continue;
+        }
+        else if(style != Shavit_GetBhopStyle(i) && track != Shavit_GetClientTrack(i))
+        {
+            continue;
+        }
+        else if(gRT_RouteType[i] == RouteType_PersonalReplay)
+        {
+            continue;
+        }
+
+        //Update current user's route path to the new WR
+        LoadMyRoute(i);
+    }
+}
+
 public void Shavit_OnRestart(int client, int track)
 {
     ResetMyRoute(client);
