@@ -89,7 +89,7 @@ int gI_PathOpacity[MAXPLAYERS + 1] = {250, ...};
 //Jump marker settings
 int gI_JumpColorIndex[MAXPLAYERS + 1];
 int gI_JumpSize[MAXPLAYERS + 1] = {MAX_JUMP_SIZE, ...};
-int gI_JumpsAhead[MAXPLAYERS + 1];
+int gI_JumpsAhead[MAXPLAYERS + 1] = {1, ...};
 int gI_JumpsIndex[MAXPLAYERS + 1];
 ArrayList gA_JumpMarkerCache[MAXPLAYERS + 1];
 
@@ -360,7 +360,7 @@ public void OnClientCookiesCached(int client)
     gI_JumpColorIndex[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : view_as<int>(WHITE);
 
     gH_JumpsAheadCookie.Get(client, cookie, sizeof(cookie));
-    gI_JumpsAhead[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 0;
+    gI_JumpsAhead[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 1;
 }
 
 bool GetMyRoute(int client)
@@ -551,7 +551,7 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
         }
     }
 
-    if(gI_JumpsIndex[client] >= gA_JumpMarkerCache[client].Length || gI_JumpsAhead[client] == 0)
+    if(gI_JumpsIndex[client] >= gA_JumpMarkerCache[client].Length)
     {
         return;
     }
@@ -1098,16 +1098,10 @@ public int JumpMarkers_MenuHandler(Menu menu, MenuAction action, int param1, int
             }
             else if(StrEqual(info, "jumps_ahead"))
             {
-                if(gI_JumpsAhead[param1] + 1 <= MAX_JUMPS_AHEAD)
+                if(++gI_JumpsAhead[param1] > MAX_JUMPS_AHEAD)
                 {
-                    gI_JumpsAhead[param1]++;
+                    gI_JumpsAhead[param1] = 1;
                 }
-                else
-                {
-                    gI_JumpsAhead[param1] = 0;
-                }
-
-                PrintDebug("Jumps Ahead: [%d]", gI_JumpsAhead[param1]);
 
                 IntToString(gI_JumpsAhead[param1], newvalue, sizeof(newvalue));
                 UpdateClientCookie(param1, gH_JumpsAheadCookie, newvalue);
