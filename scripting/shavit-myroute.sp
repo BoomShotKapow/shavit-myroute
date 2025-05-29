@@ -146,7 +146,7 @@ public void OnPluginStart()
     gH_ShowJumpsCookie = new Cookie("sm_myroute_jump", "Toggles the display of the jump markers.", CookieAccess_Protected);
     gH_JumpSizeCookie = new Cookie("sm_myroute_jump_size", "Sets the size of the jump markers.", CookieAccess_Protected);
     gH_JumpMarkerColorCookie = new Cookie("sm_myroute_jump_color", "Sets the color of the jump markers.", CookieAccess_Protected);
-    gH_JumpsAheadCookie = new Cookie("sm_myroute_jumps_ahead", "The number of jumps to draw ahead of the route path beam.", CookieAccess_Protected);
+    gH_JumpsAheadCookie = new Cookie("sm_myroute_jumps_ahead", "The number of jumps to draw ahead of the route path.", CookieAccess_Protected);
 
     RegConsoleCmd("sm_route", Command_Route, "Shows the menu for customizing the display of the route.");
     RegConsoleCmd("sm_path", Command_Route, "Shows the menu for customizing the display of the route.");
