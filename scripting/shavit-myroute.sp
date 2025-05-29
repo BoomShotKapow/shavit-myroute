@@ -767,6 +767,11 @@ void UpdateColor(int client, float velDiff)
 
 float GetVelocityDifference(int client, int frame)
 {
+    if(gA_FrameCache[client].aFrames.Length <= 0)
+    {
+        return 0.0;
+    }
+
     float clientVel[3];
     GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", clientVel);
 
