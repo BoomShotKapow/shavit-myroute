@@ -14,6 +14,7 @@
 #define MAX_BEAM_WIDTH  10
 #define MAX_JUMP_SIZE   16
 #define MAX_JUMPS_AHEAD 5
+#define DRAW_DELAY      0.5
 
 enum RouteType
 {
@@ -82,6 +83,7 @@ Cookie gH_JumpSizeCookie = null;
 Cookie gH_JumpMarkerColorCookie = null;
 Cookie gH_JumpsAheadCookie = null;
 
+float gF_Delay[MAXPLAYERS + 1];
 int gI_Style[MAXPLAYERS + 1] = {-1, ...};
 
 //Path settings
@@ -286,6 +288,7 @@ public void OnClientPutInServer(int client)
         return;
     }
 
+    gF_Delay[client] = 0.0;
     gB_LoadedReplay[client] = false;
     gRT_RouteType[client] = RouteType_Auto;
     gI_Style[client] = -1;
@@ -578,6 +581,12 @@ void DrawMyRoute(int client, frame_t prev, frame_t cur, float velDiff)
     {
         return;
     }
+    else if(gF_Delay[client] && (GetEngineTime() - gF_Delay[client]) < DRAW_DELAY)
+    {
+        return;
+    }
+
+    gF_Delay[client] = GetEngineTime();
 
     JumpMarker marker;
     gA_JumpMarkerCache[client].GetArray(gI_JumpsIndex[client], marker, sizeof(marker));
