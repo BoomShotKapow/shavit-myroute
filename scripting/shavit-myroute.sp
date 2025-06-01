@@ -18,9 +18,10 @@
 
 enum RouteType
 {
-    RouteType_Auto,           //use personal replay, otherwise use server record for the current style
-    RouteType_PersonalReplay, //only use personal replay, disabled if one isn't already saved
-    RouteType_ServerRecord,   //use the server record for the current style
+    RouteType_Auto,             //use personal replay, otherwise use server record for the current style
+    RouteType_PersonalReplay,   //use personal replay, disabled if there is no personal replay saved
+    RouteType_ServerRecord,     //use the server record for the current style selected in the menu
+    RouteType_ServerRecordAuto, //use the server record for the current style the player is on if it exists
     RouteType_Size
 };
 
@@ -475,7 +476,7 @@ bool GetMyRoute(int client)
     replay.GetHeader(header);
 
     //Set the player's route path to the server record
-    if(routeType == RouteType_ServerRecord || (!FileExists(gS_ReplayPath[client]) && routeType == RouteType_Auto) || header.iTrack != Shavit_GetClientTrack(client))
+    if(routeType == RouteType_ServerRecord || routeType == RouteType_ServerRecordAuto || (!FileExists(gS_ReplayPath[client]) && routeType == RouteType_Auto) || header.iTrack != Shavit_GetClientTrack(client))
     {
         Shavit_GetReplayFilePath(gI_Style[client] == -1 ? Shavit_GetBhopStyle(client) : gI_Style[client], Shavit_GetClientTrack(client), gS_Map, gS_ReplayFolder, gS_ReplayPath[client]);
 
@@ -485,7 +486,7 @@ bool GetMyRoute(int client)
         }
     }
 
-    char type[16];
+    char type[32];
     GetClientRouteType(client, type, sizeof(type));
 
     PrintDebug("[%N]'s route path | Type: [%s] | Path [%s]", client, type, gS_ReplayPath[client]);
@@ -507,7 +508,7 @@ bool LoadMyRoute(int client)
         return false;
     }
 
-    char type[16];
+    char type[32];
     GetClientRouteType(client, type, sizeof(type));
 
     if(FileExists(gS_ReplayPath[client]) && !LoadReplayCache2(gA_FrameCache[client], Shavit_GetClientTrack(client), gS_ReplayPath[client], gS_Map))
@@ -709,6 +710,11 @@ public void Shavit_OnTrackChanged(int client, int oldtrack, int newtrack)
 
 public void Shavit_OnStyleChanged(int client, int oldstyle, int newstyle, int track, bool manual)
 {
+    if(gRT_RouteType[client] == RouteType_ServerRecordAuto)
+    {
+        gI_Style[client] = newstyle;
+    }
+
     LoadMyRoute(client);
 }
 
@@ -914,6 +920,11 @@ void GetClientRouteType(int client, char[] buffer, int length)
         {
             strcopy(buffer, length, "Server Record");
         }
+
+        case RouteType_ServerRecordAuto:
+        {
+            strcopy(buffer, length, "Server Record (Automatically)");
+        }
     }
 }
 
@@ -958,7 +969,7 @@ bool CreateMyRouteMenu(int client, int page = 0)
     menu.AddItem("enabled", gB_ShowRoute[client] ? "[X] Enabled" : "[ ] Enabled");
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
 
-    char type[16];
+    char type[32];
     GetClientRouteType(client, type, sizeof(type));
 
     char display[64];
@@ -966,7 +977,7 @@ bool CreateMyRouteMenu(int client, int page = 0)
 
     menu.AddItem("type", display);
 
-    if(gRT_RouteType[client] == RouteType_ServerRecord)
+    if(gRT_RouteType[client] == RouteType_ServerRecord || gRT_RouteType[client] == RouteType_ServerRecordAuto)
     {
         if(gA_Styles[Shavit_GetClientTrack(client)].Length <= 0)
         {
@@ -975,7 +986,7 @@ bool CreateMyRouteMenu(int client, int page = 0)
         else
         {
             char styleName[64];
-            Shavit_GetStyleStrings(gI_Style[client], sStyleName, styleName, sizeof(styleName));
+            Shavit_GetStyleStrings(gI_Style[client] == -1 ? Shavit_GetBhopStyle(client) : gI_Style[client], sStyleName, styleName, sizeof(styleName));
 
             int index = gA_Styles[Shavit_GetClientTrack(client)].FindString(styleName);
 
@@ -987,7 +998,14 @@ bool CreateMyRouteMenu(int client, int page = 0)
             FormatEx(display, sizeof(display), "[%s]", styleName);
         }
 
-        menu.AddItem("style", display, gA_Styles[Shavit_GetClientTrack(client)].Length <= 0 ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
+        if(gRT_RouteType[client] == RouteType_ServerRecord)
+        {
+            menu.AddItem("style", display, gA_Styles[Shavit_GetClientTrack(client)].Length <= 0 ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
+        }
+        else
+        {
+            menu.AddItem("style", display, ITEMDRAW_DISABLED);
+        }
     }
 
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
