@@ -85,6 +85,7 @@ Cookie gH_JumpsAheadCookie = null;
 
 float gF_Delay[MAXPLAYERS + 1];
 int gI_Style[MAXPLAYERS + 1] = {-1, ...};
+ArrayList gA_Styles[TRACKS_SIZE];
 
 //Path settings
 int gI_PathColorIndex[MAXPLAYERS + 1] = {-1, ...};
@@ -251,6 +252,8 @@ public void OnMapStart()
 {
     GetLowercaseMapName(gS_Map);
 
+    GetStylesWithServerRecord();
+
     if(gB_Late)
     {
         gB_Late = false;
@@ -353,6 +356,16 @@ public void OnClientCookiesCached(int client)
     {
         gI_Style[client] = -1;
     }
+    else
+    {
+        char tempPath[PLATFORM_MAX_PATH];
+        Shavit_GetReplayFilePath(gI_Style[client], Shavit_GetClientTrack(client), gS_Map, gS_ReplayFolder, tempPath);
+
+        if(!FileExists(tempPath))
+        {
+            gI_Style[client] = GetClosestStyle(client);
+        }
+    }
 
     gH_ShowPathCookie.Get(client, cookie, sizeof(cookie));
     gB_ShowPath[client] = (strlen(cookie) > 0) ? view_as<bool>(StringToInt(cookie)) : true;
@@ -377,6 +390,64 @@ public void OnClientCookiesCached(int client)
 
     gH_JumpsAheadCookie.Get(client, cookie, sizeof(cookie));
     gI_JumpsAhead[client] = (strlen(cookie) > 0) ? StringToInt(cookie) : 1;
+}
+
+void GetStylesWithServerRecord()
+{
+    char tempPath[PLATFORM_MAX_PATH];
+
+    //Get styles with replays for each track
+    for(int track = 0; track < TRACKS_SIZE; track++)
+    {
+        if(gA_Styles[track] == null)
+        {
+            gA_Styles[track] = new ArrayList(ByteCountToCells(64));
+        }
+        else
+        {
+            gA_Styles[track].Clear();
+        }
+
+        for(int style = 0; style < Shavit_GetStyleCount(); style++)
+        {
+            Shavit_GetReplayFilePath(style, track, gS_Map, gS_ReplayFolder, tempPath);
+
+            if(FileExists(tempPath))
+            {
+                char styleName[64];
+                Shavit_GetStyleStrings(style, sStyleName, styleName, sizeof(styleName));
+
+                PrintDebug("Found style [%s]", styleName);
+
+                gA_Styles[track].PushString(styleName);
+            }
+        }
+    }
+}
+
+int GetClosestStyle(int client)
+{
+    int track = Shavit_GetClientTrack(client);
+
+    char styleName[64];
+
+    //Only show styles that have a replay
+    for(int i = gI_Style[client]; i < Shavit_GetStyleCount(); i++)
+    {
+        if(i == Shavit_GetStyleCount() - 1)
+        {
+            i = 0;
+        }
+
+        Shavit_GetStyleStrings(i, sStyleName, styleName, sizeof(styleName));
+
+        if(gA_Styles[track].FindString(styleName) != -1)
+        {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 bool GetMyRoute(int client)
@@ -686,8 +757,18 @@ public void Shavit_OnPersonalReplayDeleted(int client)
     LoadMyRoute(client);
 }
 
+public void Shavit_OnReplaySaved(int client, int style, float time, int jumps, int strafes, float sync, int track, float oldtime, float perfs, float avgvel, float maxvel, int timestamp, bool isbestreplay, bool istoolong, bool iscopy, const char[] replaypath, ArrayList frames, int preframes, int postframes, const char[] name)
+{
+    if(isbestreplay)
+    {
+        GetStylesWithServerRecord();
+    }
+}
+
 public void Shavit_OnWRDeleted(int style, int id, int track, int accountid, const char[] mapname)
 {
+    GetStylesWithServerRecord();
+
     for(int i = 1; i <= MaxClients; i++)
     {
         if(!IsValidClient(i) || IsFakeClient(i))
@@ -887,11 +968,26 @@ bool CreateMyRouteMenu(int client, int page = 0)
 
     if(gRT_RouteType[client] == RouteType_ServerRecord)
     {
-        char styleName[64];
-        Shavit_GetStyleStrings(gI_Style[client] == -1 ? 0 : gI_Style[client], sStyleName, styleName, sizeof(styleName));
-        FormatEx(display, sizeof(display), "[%s]", styleName);
+        if(gA_Styles[Shavit_GetClientTrack(client)].Length <= 0)
+        {
+            display = "No server records";
+        }
+        else
+        {
+            char styleName[64];
+            Shavit_GetStyleStrings(gI_Style[client], sStyleName, styleName, sizeof(styleName));
 
-        menu.AddItem("style", display);
+            int index = gA_Styles[Shavit_GetClientTrack(client)].FindString(styleName);
+
+            if(index != -1)
+            {
+                gA_Styles[Shavit_GetClientTrack(client)].GetString(index, styleName, sizeof(styleName));
+            }
+
+            FormatEx(display, sizeof(display), "[%s]", styleName);
+        }
+
+        menu.AddItem("style", display, gA_Styles[Shavit_GetClientTrack(client)].Length <= 0 ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
     }
 
     menu.AddItem("-1", "", ITEMDRAW_SPACER);
@@ -944,26 +1040,7 @@ public int MyRoute_MenuHandler(Menu menu, MenuAction action, int param1, int par
                     gI_Style[param1] = 0;
                 }
 
-                char tempPath[PLATFORM_MAX_PATH];
-
-                //Only show styles that have a replay
-                for(int i = gI_Style[param1]; i < Shavit_GetStyleCount(); i++)
-                {
-                    if(i == Shavit_GetStyleCount() - 1)
-                    {
-                        gI_Style[param1] = 0;
-                    }
-
-                    Shavit_GetReplayFilePath(i, Shavit_GetClientTrack(param1), gS_Map, gS_ReplayFolder, tempPath);
-
-                    PrintDebug("Checking for replay: [%s]", tempPath);
-
-                    if(FileExists(tempPath))
-                    {
-                        gI_Style[param1] = i;
-                        break;
-                    }
-                }
+                gI_Style[param1] = GetClosestStyle(param1);
 
                 char newvalue[4];
                 IntToString(view_as<int>(gI_Style[param1]), newvalue, sizeof(newvalue));
