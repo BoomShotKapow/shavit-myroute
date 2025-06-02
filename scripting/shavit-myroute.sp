@@ -432,12 +432,19 @@ int GetClosestStyle(int client)
 
     char styleName[64];
 
+    int loopCount = 0;
+
     //Only show styles that have a replay
-    for(int i = gI_Style[client]; i < Shavit_GetStyleCount(); i++)
+    for(int i = gI_Style[client] == -1 ? 0 : gI_Style[client]; i < Shavit_GetStyleCount(); i++)
     {
         if(i == Shavit_GetStyleCount() - 1)
         {
             i = 0;
+
+            if(++loopCount > 1)
+            {
+                break;
+            }
         }
 
         Shavit_GetStyleStrings(i, sStyleName, styleName, sizeof(styleName));
