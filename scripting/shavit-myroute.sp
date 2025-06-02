@@ -29,8 +29,6 @@ enum struct JumpMarker
 {
     int id;
     int frameNum;
-
-    //float square[4][3]
     float line1[3];
     float line2[3];
     float line3[3];
@@ -39,25 +37,16 @@ enum struct JumpMarker
     void Initialize(frame_t frame, int size, int id, int frameNum)
     {
         float jumpSize = float(size);
-
         this.id = id;
         this.frameNum = frameNum;
 
-        this.line1[0] = frame.pos[0] + jumpSize;
-        this.line1[1] = frame.pos[1] + jumpSize;
-        this.line1[2] = frame.pos[2];
-
-        this.line2[0] = frame.pos[0] + jumpSize;
-        this.line2[1] = frame.pos[1] - jumpSize;
-        this.line2[2] = frame.pos[2];
-
-        this.line3[0] = frame.pos[0] - jumpSize;
-        this.line3[1] = frame.pos[1] - jumpSize;
-        this.line3[2] = frame.pos[2];
-
-        this.line4[0] = frame.pos[0] - jumpSize;
-        this.line4[1] = frame.pos[1] + jumpSize;
-        this.line4[2] = frame.pos[2];
+        for (int i = 0; i < 3; ++i)
+        {
+            this.line1[i] = frame.pos[i] + jumpSize;
+            this.line2[i] = frame.pos[i] - jumpSize;
+            this.line3[i] = frame.pos[i] - jumpSize;
+            this.line4[i] = frame.pos[i] + jumpSize;
+        }
     }
 
     void Draw(int client, int color[4])
