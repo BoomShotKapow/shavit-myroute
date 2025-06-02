@@ -725,28 +725,6 @@ public void Shavit_OnStyleChanged(int client, int oldstyle, int newstyle, int tr
     LoadMyRoute(client);
 }
 
-public void Shavit_OnWorldRecord(int client, int style, float time, int jumps, int strafes, float sync, int track, float oldwr, float oldtime, float perfs, float avgvel, float maxvel, int timestamp)
-{
-    for(int i = 1; i <= MaxClients; i++)
-    {
-        if(!IsValidClient(i) || IsFakeClient(i))
-        {
-            continue;
-        }
-        else if(style != Shavit_GetBhopStyle(i) && track != Shavit_GetClientTrack(i))
-        {
-            continue;
-        }
-        else if(gRT_RouteType[i] == RouteType_PersonalReplay && i != client)
-        {
-            continue;
-        }
-
-        //Update current user's route path to the new WR
-        LoadMyRoute(i);
-    }
-}
-
 public Action Shavit_OnTeleport(int client, int index)
 {
     if(Shavit_GetTimerStatus(client) != Timer_Running || !gH_ClosestPos[client])
@@ -775,6 +753,26 @@ public void Shavit_OnReplaySaved(int client, int style, float time, int jumps, i
     if(isbestreplay)
     {
         GetStylesWithServerRecord();
+
+        //Load routes here instead of Shavit_OnWorldRecord because the replay file is ready to be used now
+        for(int i = 1; i <= MaxClients; i++)
+        {
+            if(!IsValidClient(i) || IsFakeClient(i))
+            {
+                continue;
+            }
+            else if(style != Shavit_GetBhopStyle(i) && track != Shavit_GetClientTrack(i))
+            {
+                continue;
+            }
+            else if(gRT_RouteType[i] == RouteType_PersonalReplay && i != client)
+            {
+                continue;
+            }
+
+            //Update current user's route path to the new WR
+            LoadMyRoute(i);
+        }
     }
 }
 
